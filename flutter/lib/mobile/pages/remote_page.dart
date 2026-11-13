@@ -653,7 +653,22 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                         setState(() => _showEdit = false);
                         showOptions(context, widget.id, gFFI.dialogManager);
                       },
-                    )
+                    ),
+                    // rustdesk-controller: controller-mouse mode on/off
+                    if (_gamepad != null)
+                      ValueListenableBuilder<bool>(
+                        valueListenable: _gamepad!.mouseMode,
+                        builder: (context, on, _) => IconButton(
+                          color: on ? Colors.white : Colors.white38,
+                          tooltip: on
+                              ? 'Controller mouse: ON'
+                              : 'Controller mouse: OFF',
+                          icon: Icon(on
+                              ? Icons.sports_esports
+                              : Icons.sports_esports_outlined),
+                          onPressed: () => _gamepad?.toggleMouseMode(),
+                        ),
+                      ),
                   ] +
                   (isWebDesktop || ffiModel.viewOnly || !ffiModel.keyboard
                       ? []

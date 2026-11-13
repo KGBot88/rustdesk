@@ -29,6 +29,14 @@ object GamepadBridge {
     var active = false
         private set
 
+    /** Controller-mouse mode (Dart "set_mode"). Off = pad is inert on the PC; B/Back act as Android Back. */
+    @Volatile
+    var mappingOn = true
+        private set
+
+    /** Android Back action, set by MainActivity. */
+    var onBack: (() -> Unit)? = null
+
     private val last = FloatArray(8)
     private val loggedDevices = HashSet<Int>()
 
@@ -36,6 +44,12 @@ object GamepadBridge {
         channel = ch
         ch.setMethodCallHandler { call, result ->
             when (call.method) {
+                "set_mode" -> {
+                    mappingOn = call.arguments as? Boolean ?: true
+                    last.fill(0f)
+                    Log.i(TAG, "mappingOn=$mappingOn")
+                    result.success(true)
+                }
                 "set_active" -> {
                     active = call.arguments as? Boolean ?: false
                     last.fill(0f)
@@ -70,6 +84,7 @@ object GamepadBridge {
         if (ev.actionMasked != MotionEvent.ACTION_MOVE) return false
         val dev = ev.device ?: return false
         logDevice(dev)
+        if (!mappingOn) return true // inert: sticks/triggers/hat do nothing
 
         // Right stick is AXIS_Z/AXIS_RZ on standard Android mappings, AXIS_RX/AXIS_RY on some pads.
         val useZ = has(dev, MotionEvent.AXIS_Z) && has(dev, MotionEvent.AXIS_RZ)
@@ -105,6 +120,19 @@ object GamepadBridge {
             KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> return false
         }
         logDevice(dev!!)
+        val code = ev.keyCode
+        val comboKey = code == KeyEvent.KEYCODE_BUTTON_SELECT || code == KeyEvent.KEYCODE_BUTTON_START
+        if (!mappingOn && !comboKey) {
+            // Mouse mode off: nothing goes to the PC. B and Back keep acting as Android Back.
+            return when (code) {
+                KeyEvent.KEYCODE_BACK -> false
+                KeyEvent.KEYCODE_BUTTON_B -> {
+                    if (ev.action == KeyEvent.ACTION_UP && !ev.isCanceled) onBack?.invoke()
+                    true
+                }
+                else -> true
+            }
+        }
         if (ev.action == KeyEvent.ACTION_DOWN && ev.repeatCount > 0) return true // Dart does its own repeat
         if (ev.action != KeyEvent.ACTION_DOWN && ev.action != KeyEvent.ACTION_UP) return true
         channel?.invokeMethod(

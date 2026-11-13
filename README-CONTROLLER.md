@@ -24,8 +24,9 @@ buttons behave normally.
 | X | Backspace (repeats while held) |
 | Y | Open or close the on-screen keyboard |
 | R1 / L1 | Next / previous monitor (cycles through all monitors; numbers match RustDesk's own monitor buttons) |
-| Start | Windows key (Start menu) |
-| Select | Alt+Tab (switch to the last window) |
+| Start (tap) | Windows key (Start menu) |
+| Select (tap) | Alt+Tab (switch to the last window) |
+| **Hold Select + Start for 1 s** | Controller mouse mode on/off (also: the controller icon in RustDesk's bottom toolbar) |
 | Android Back (from the pad) | Swallowed, so you can't leave the session by accident |
 | Home, volume, power | Unchanged (Android keeps them) |
 
@@ -48,6 +49,15 @@ the keyboard does (`GamepadPreImeFrame`), so Y closes it again and every button 
 ### Leaving a session
 The pad's Back button is swallowed during a session. To leave, tap the screen to show
 RustDesk's toolbar and press X.
+
+### Controller mouse mode on/off
+Switch it with **Select + Start held for 1 second**, or tap the **controller icon** in the session's
+bottom toolbar (white = on, faded = off). A quick tap of Select or Start still does its normal job,
+and fires when you let go.
+- **On** (default): the button map above.
+- **Off**: the controller does nothing on the PC. B and Back act as normal Android Back, and Home
+  and volume work as always. Select+Start still switches the mode back on.
+The app remembers your choice for next time.
 
 ## What changed (small on purpose, so it's easy to re-apply)
 - `flutter/android/.../GamepadBridge.kt` (new): takes the controller's sticks and buttons

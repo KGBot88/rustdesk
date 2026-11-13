@@ -40,11 +40,21 @@ class GamepadController {
   static const Duration repeatDelay = Duration(milliseconds: 380);
   static const Duration repeatEvery = Duration(milliseconds: 55);
   static const Duration tick = Duration(milliseconds: 8);
+  static const Duration comboHold = Duration(seconds: 1); // hold Select+Start
+  static const String _kOptMouseMode = 'rdpad-mouse-mode'; // 'N' = off
 
   final FFI ffi;
   final VoidCallback onToggleKeyboard;
 
   GamepadController({required this.ffi, required this.onToggleKeyboard});
+
+  /// Controller-mouse mode. Off = the pad does nothing on the PC (Android keeps B/Back/Home).
+  final ValueNotifier<bool> mouseMode = ValueNotifier<bool>(
+      bind.getLocalFlutterOption(k: _kOptMouseMode) != 'N');
+
+  // Select+Start combo state.
+  bool _selectDown = false, _startDown = false, _bothWereDown = false;
+  Timer? _comboTimer;
 
   InputModel get _input => ffi.inputModel;
   CursorModel get _cursor => ffi.cursorModel;
@@ -67,6 +77,7 @@ class GamepadController {
 
   void start() {
     _channel.setMethodCallHandler(_onCall);
+    _channel.invokeMethod('set_mode', mouseMode.value);
     _channel.invokeMethod('set_active', true);
     _clock
       ..reset()
@@ -80,6 +91,12 @@ class GamepadController {
     _channel.setMethodCallHandler(null);
     _timer?.cancel();
     _timer = null;
+    _comboTimer?.cancel();
+    _releaseAll();
+  }
+
+  /// Let go of everything: held clicks, repeating keys, stick state.
+  void _releaseAll() {
     for (final t in _repeat.values) {
       t.cancel();
     }
@@ -87,11 +104,54 @@ class GamepadController {
     if (_leftHeld) _input.tapUp(MouseButtons.left);
     if (_rightHeld) _input.tapUp(MouseButtons.right);
     _leftHeld = _rightHeld = false;
+    _lx = _ly = _rx = _ry = _lt = _rt = 0;
+    _ltAxisDown = _rtAxisDown = _l2KeyDown = _r2KeyDown = false;
+    _hatX = _hatY = 0;
+    _scrollAccX = _scrollAccY = 0;
+  }
+
+  /// Turn controller-mouse mode on or off (toolbar button or Select+Start held).
+  void setMouseMode(bool on) {
+    if (!on) _releaseAll();
+    mouseMode.value = on;
+    bind.setLocalFlutterOption(k: _kOptMouseMode, v: on ? 'Y' : 'N');
+    _channel.invokeMethod('set_mode', on);
+    showToast(on ? 'Controller mouse ON' : 'Controller mouse OFF',
+        timeout: const Duration(milliseconds: 1200));
+  }
+
+  void toggleMouseMode() => setMouseMode(!mouseMode.value);
+
+  /// Select and Start: a tap does its normal job (on release); holding both toggles the mode.
+  void _onComboKey(int code, bool down) {
+    if (down) {
+      if (code == _K.select) _selectDown = true;
+      if (code == _K.start) _startDown = true;
+      if (_selectDown && _startDown && !_bothWereDown) {
+        _bothWereDown = true;
+        _comboTimer?.cancel();
+        _comboTimer = Timer(comboHold, toggleMouseMode);
+      }
+      return;
+    }
+    final wasDown = code == _K.select ? _selectDown : _startDown;
+    if (code == _K.select) _selectDown = false;
+    if (code == _K.start) _startDown = false;
+    _comboTimer?.cancel();
+    if (wasDown && !_bothWereDown && mouseMode.value) {
+      if (code == _K.select) {
+        _altTab();
+      } else {
+        _press('Meta'); // Windows key / Start menu
+      }
+    }
+    if (!_selectDown && !_startDown) _bothWereDown = false;
   }
 
   Future<dynamic> _onCall(MethodCall call) async {
     switch (call.method) {
       case 'axes':
+        if (!mouseMode.value) break;
         final v = (call.arguments as List).cast<num>();
         _lx = v[0].toDouble();
         _ly = v[1].toDouble();
@@ -213,7 +273,14 @@ class GamepadController {
     }
   }
 
-  void _onKey(int code, bool down) => down ? _keyDown(code) : _keyUp(code);
+  void _onKey(int code, bool down) {
+    if (code == _K.select || code == _K.start) {
+      _onComboKey(code, down);
+      return;
+    }
+    if (!mouseMode.value) return;
+    down ? _keyDown(code) : _keyUp(code);
+  }
 
   /// Keys that send a remote key and auto-repeat while held.
   static const Map<int, String> _repeatKeys = {
@@ -266,12 +333,6 @@ class GamepadController {
         _precision = !_precision;
         showToast(_precision ? 'Precise cursor ON' : 'Precise cursor OFF',
             timeout: const Duration(milliseconds: 900));
-        break;
-      case _K.start:
-        _press('Meta'); // Windows key / Start menu
-        break;
-      case _K.select:
-        _altTab();
         break;
       case _K.back:
         // Swallowed on purpose: no accidental "leave session".

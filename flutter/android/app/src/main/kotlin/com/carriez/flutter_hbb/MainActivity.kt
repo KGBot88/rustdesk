@@ -96,6 +96,7 @@ class MainActivity : FlutterActivity() {
         initFlutterChannel(flutterMethodChannel!!)
         // rustdesk-controller: gamepad -> remote mouse/keys
         GamepadBridge.attach(MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rd_gamepad"))
+        GamepadBridge.onBack = { onBackPressed() }
         thread {
             try {
                 setCodecInfo()
