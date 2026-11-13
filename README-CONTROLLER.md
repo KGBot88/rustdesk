@@ -36,11 +36,18 @@ Tuning values (speeds, deadzone, curve, repeat rate) sit at the top of
 `flutter/lib/mobile/widgets/gamepad_controller.dart`.
 
 ### On-screen keyboard on the Thor
-Android hides the on-screen keyboard while a "physical keyboard" is connected, and the Thor's
-built-in controller counts as one. That's why RustDesk's own keyboard button seemed to do nothing.
-Fix: **Settings → System → Keyboard → Physical keyboard → "Use on-screen keyboard" ON**
-(the wording varies a little by Android version). After that, Y and RustDesk's keyboard button
-both open it.
+The keyboard always worked. **The Thor opens Android's keyboard on its bottom screen**, so if
+you're watching the top screen it looks like nothing happened. Press Y (or RustDesk's keyboard
+button) and type on the bottom screen. In landscape Gboard shows a big text strip above the keys
+that's full of "1111...". That's RustDesk's own hidden helper text (upstream behaviour) and it's
+harmless. Your typing still reaches the PC correctly.
+
+An open keyboard normally swallows controller buttons. This fork catches pad buttons before
+the keyboard does (`GamepadPreImeFrame`), so Y closes it again and every button keeps working.
+
+### Leaving a session
+The pad's Back button is swallowed during a session. To leave, tap the screen to show
+RustDesk's toolbar and press X.
 
 ## What changed (small on purpose, so it's easy to re-apply)
 - `flutter/android/.../GamepadBridge.kt` (new): takes the controller's sticks and buttons

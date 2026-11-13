@@ -21,6 +21,8 @@ import android.os.IBinder
 import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.media.MediaCodecInfo
 import android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
@@ -112,6 +114,14 @@ class MainActivity : FlutterActivity() {
                 mapOf("name" to "input", "value" to inputPer.toString())
             )
         }
+    }
+
+    // rustdesk-controller: wrap the Flutter view so gamepad buttons beat the soft keyboard.
+    override fun setContentView(view: View?) {
+        if (view == null) return super.setContentView(view)
+        super.setContentView(GamepadPreImeFrame(this).apply {
+            addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        })
     }
 
     override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {

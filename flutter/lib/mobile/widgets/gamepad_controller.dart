@@ -115,7 +115,7 @@ class GamepadController {
   /// Radial deadzone + response curve. Returns a vector with length 0..1.
   static Point<double> _shape(double x, double y, double curve) {
     final mag = sqrt(x * x + y * y);
-    if (mag < stickDeadzone) return const Point(0, 0);
+    if (mag < stickDeadzone) return const Point(0.0, 0.0);
     final norm = ((min(mag, 1.0) - stickDeadzone) / (1 - stickDeadzone));
     final shaped = pow(norm, curve).toDouble();
     return Point(x / mag * shaped, y / mag * shaped);

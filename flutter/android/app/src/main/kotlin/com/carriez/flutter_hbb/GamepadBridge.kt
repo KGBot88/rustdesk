@@ -11,10 +11,12 @@ package com.carriez.flutter_hbb
  * Android navigation. Outside a session nothing is intercepted.
  */
 
+import android.content.Context
 import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.widget.FrameLayout
 import io.flutter.plugin.common.MethodChannel
 import kotlin.math.abs
 import kotlin.math.max
@@ -110,5 +112,17 @@ object GamepadBridge {
             mapOf("code" to ev.keyCode, "down" to (ev.action == KeyEvent.ACTION_DOWN))
         )
         return true
+    }
+}
+
+/**
+ * Wraps the Flutter view so controller buttons are taken in the pre-IME stage.
+ * Without it, an open soft keyboard (Gboard) swallows gamepad buttons before
+ * Activity.dispatchKeyEvent runs, so Y couldn't close the keyboard and B/L1/R1 did nothing.
+ */
+class GamepadPreImeFrame(context: Context) : FrameLayout(context) {
+    override fun dispatchKeyEventPreIme(event: KeyEvent): Boolean {
+        if (GamepadBridge.onKey(event)) return true
+        return super.dispatchKeyEventPreIme(event)
     }
 }
