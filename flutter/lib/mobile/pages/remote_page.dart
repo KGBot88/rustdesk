@@ -7,6 +7,7 @@ import 'package:flutter_hbb/common/widgets/toolbar.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/mobile/widgets/floating_mouse.dart';
 import 'package:flutter_hbb/mobile/widgets/floating_mouse_widgets.dart';
+import 'package:flutter_hbb/mobile/widgets/gamepad_controller.dart';
 import 'package:flutter_hbb/mobile/widgets/gesture_help.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
@@ -103,6 +104,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   final FocusNode _mobileFocusNode = FocusNode();
   final FocusNode _physicalFocusNode = FocusNode();
   var _showEdit = false; // use soft keyboard
+  GamepadController? _gamepad; // rustdesk-controller
 
   Worker? _waylandKeyboardGateWorker;
   bool _waylandKeyboardGateInitialized = false;
@@ -171,6 +173,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
     inputModel.keyboardInputAllowed = true;
 
+    // rustdesk-controller: handheld controller drives the remote mouse/keys.
+    if (isAndroid) {
+      _gamepad = GamepadController(
+          ffi: gFFI, onToggleKeyboard: _toggleKeyboardFromGamepad)
+        ..start();
+    }
+
     // Wayland sessions may use clipboard-based text input on the controlled side.
     // Require explicit user confirmation before allowing soft-keyboard and
     // clipboard-assisted text input. Physical keyboard events are not gated here.
@@ -187,6 +196,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   @override
   Future<void> dispose() async {
     HardwareKeyboard.instance.removeHandler(_handleLocalKeyEvent);
+    _gamepad?.stop();
+    _gamepad = null;
     WidgetsBinding.instance.removeObserver(this);
     // Close the session up-front. `gFFI.close()` below only calls `sessionClose`
     // after several awaits (canvas save, image update, the `enable_soft_keyboard`
@@ -437,6 +448,21 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       char = 'VK_SPACE';
     }
     inputModel.inputKey(char);
+  }
+
+  // rustdesk-controller: one button opens/closes the soft keyboard.
+  void _toggleKeyboardFromGamepad() {
+    if (!mounted) return;
+    if (_showEdit) {
+      setState(() {
+        _showEdit = false;
+        gFFI.invokeMethod("enable_soft_keyboard", false);
+        _mobileFocusNode.unfocus();
+        _physicalFocusNode.requestFocus();
+      });
+    } else {
+      openKeyboard();
+    }
   }
 
   void openKeyboard() {

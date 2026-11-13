@@ -20,6 +20,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.WindowManager
 import android.media.MediaCodecInfo
 import android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
@@ -91,6 +92,8 @@ class MainActivity : FlutterActivity() {
             channelTag
         )
         initFlutterChannel(flutterMethodChannel!!)
+        // rustdesk-controller: gamepad -> remote mouse/keys
+        GamepadBridge.attach(MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rd_gamepad"))
         thread {
             try {
                 setCodecInfo()
@@ -111,7 +114,13 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        if (GamepadBridge.onMotion(ev)) return true
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (GamepadBridge.onKey(event)) return true
         if (event.action == KeyEvent.ACTION_DOWN &&
             KeyEvent.isModifierKey(event.keyCode) && currentFocus == null) {
             // Android can drop modifier-first input when the native view has no focus.
