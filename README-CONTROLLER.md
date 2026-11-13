@@ -23,7 +23,7 @@ buttons behave normally.
 | B | Esc |
 | X | Backspace (repeats while held) |
 | Y | Open or close the on-screen keyboard |
-| R1 / L1 | Next / previous monitor (cycles through all monitors) |
+| R1 / L1 | Next / previous monitor (cycles through all monitors; numbers match RustDesk's own monitor buttons) |
 | Start | Windows key (Start menu) |
 | Select | Alt+Tab (switch to the last window) |
 | Android Back (from the pad) | Swallowed, so you can't leave the session by accident |
