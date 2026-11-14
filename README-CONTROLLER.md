@@ -25,7 +25,7 @@ buttons behave normally.
 | X | Backspace (repeats while held) |
 | Y (tap) | Open the on-screen keyboard (always opens, never closes it by mistake) |
 | Y (hold half a second) | Close the on-screen keyboard |
-| Double-tap the screen | Fit the whole PC monitor on the handheld's screen (undoes pinch zoom) |
+| Double-tap the screen | Fit the whole PC monitor into the space above the toolbar, taskbar included (undoes pinch zoom) |
 | R1 / L1 | Next / previous monitor (cycles through all monitors; numbers match RustDesk's own monitor buttons) |
 | Start (tap) | Windows key (Start menu) |
 | Select (tap) | Alt+Tab (switch to the last window) |
@@ -48,6 +48,7 @@ Typing is kept in sync with the PC:
 - The text strip above the keys shows what you've typed since the keyboard opened (or since the
   last Enter). Upstream RustDesk filled it with "1111..." helper text; this fork's helper text is
   invisible.
+- Backspace (Gboard's or the pad's X) deletes in the strip and on the PC together.
 - Autocorrect and suggestions work. When Gboard changes a word, the fix is sent to the PC too
   (upstream ignored those changes).
 - The pad's Backspace (X) and Enter (A) also update the strip. Enter and pad Undo (B) start the
