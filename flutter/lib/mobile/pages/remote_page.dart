@@ -27,7 +27,11 @@ import '../../utils/image.dart';
 import '../widgets/dialog.dart';
 import '../widgets/custom_scale_widget.dart';
 
-final initText = '1' * 1024;
+// rustdesk-controller: the hidden helper text used to be '1' * 1024, which Gboard shows as
+// "1111..." in its text strip every time the keyboard opens. A zero-width space keeps the
+// same diff/backspace trick but is invisible.
+const kSoftKbFiller = '\u200B'; // zero-width space
+final initText = kSoftKbFiller * 1024;
 
 // Workaround for Android (default input method, Microsoft SwiftKey keyboard) when using physical keyboard.
 // When connecting a physical keyboard, `KeyEvent.physicalKey.usbHidUsage` are wrong is using Microsoft SwiftKey keyboard.
@@ -335,9 +339,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     var oldValue = _value;
     _value = newValue;
     var i = newValue.length - 1;
-    for (; i >= 0 && newValue[i] != '1'; --i) {}
+    for (; i >= 0 && newValue[i] != kSoftKbFiller; --i) {}
     var j = oldValue.length - 1;
-    for (; j >= 0 && oldValue[j] != '1'; --j) {}
+    for (; j >= 0 && oldValue[j] != kSoftKbFiller; --j) {}
     if (i < j) j = i;
     var subNewValue = newValue.substring(j + 1);
     var subOldValue = oldValue.substring(j + 1);
@@ -386,8 +390,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     _value = newValue;
     if (oldValue.isNotEmpty &&
         newValue.isNotEmpty &&
-        oldValue[0] == '1' &&
-        newValue[0] != '1') {
+        oldValue[0] == kSoftKbFiller &&
+        newValue[0] != kSoftKbFiller) {
       // clipboard
       oldValue = '';
     }
