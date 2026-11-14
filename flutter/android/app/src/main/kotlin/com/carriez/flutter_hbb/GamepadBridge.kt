@@ -37,6 +37,9 @@ object GamepadBridge {
     /** Android Back action, set by MainActivity. */
     var onBack: (() -> Unit)? = null
 
+    /** Force the soft keyboard to show (Dart "force_ime"), set by MainActivity. */
+    var onForceIme: (() -> Unit)? = null
+
     private val last = FloatArray(8)
     private val loggedDevices = HashSet<Int>()
 
@@ -48,6 +51,10 @@ object GamepadBridge {
                     mappingOn = call.arguments as? Boolean ?: true
                     last.fill(0f)
                     Log.i(TAG, "mappingOn=$mappingOn")
+                    result.success(true)
+                }
+                "force_ime" -> {
+                    onForceIme?.invoke()
                     result.success(true)
                 }
                 "set_active" -> {

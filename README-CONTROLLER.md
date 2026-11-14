@@ -20,9 +20,12 @@ buttons behave normally.
 | L3 (click left stick) | Middle click (hold for middle-drag) |
 | D-pad | Arrow keys (repeat while held) |
 | A | Enter |
-| B | Esc |
+| B (tap) | Undo (Ctrl+Z) |
+| B (hold half a second) | Esc |
 | X | Backspace (repeats while held) |
-| Y | Open or close the on-screen keyboard |
+| Y (tap) | Open the on-screen keyboard (always opens, never closes it by mistake) |
+| Y (hold half a second) | Close the on-screen keyboard |
+| Double-tap the screen | Fit the whole PC monitor on the handheld's screen (undoes pinch zoom) |
 | R1 / L1 | Next / previous monitor (cycles through all monitors; numbers match RustDesk's own monitor buttons) |
 | Start (tap) | Windows key (Start menu) |
 | Select (tap) | Alt+Tab (switch to the last window) |
@@ -39,9 +42,18 @@ Tuning values (speeds, deadzone, curve, repeat rate) sit at the top of
 ### On-screen keyboard on the Thor
 The keyboard always worked. **The Thor opens Android's keyboard on its bottom screen**, so if
 you're watching the top screen it looks like nothing happened. Press Y (or RustDesk's keyboard
-button) and type on the bottom screen. In landscape Gboard shows a big text strip above the keys
-that's full of "1111...". That's RustDesk's own hidden helper text (upstream behaviour) and it's
-harmless. Your typing still reaches the PC correctly.
+button) and type on the bottom screen.
+
+Typing is kept in sync with the PC:
+- The text strip above the keys shows what you've typed since the keyboard opened (or since the
+  last Enter). Upstream RustDesk filled it with "1111..." helper text; this fork's helper text is
+  invisible.
+- Autocorrect and suggestions work. When Gboard changes a word, the fix is sent to the PC too
+  (upstream ignored those changes).
+- The pad's Backspace (X) and Enter (A) also update the strip. Enter and pad Undo (B) start the
+  strip fresh because the PC text changed in a way the keyboard can't see.
+- The strip can't show text that was already on the PC, or follow you if you click somewhere else
+  on the PC.
 
 An open keyboard normally swallows controller buttons. This fork catches pad buttons before
 the keyboard does (`GamepadPreImeFrame`), so Y closes it again and every button keeps working.
@@ -66,7 +78,7 @@ The app remembers your choice for next time.
 - `flutter/lib/mobile/widgets/gamepad_controller.dart` (new): turns sticks and buttons into remote
   mouse moves, clicks, scroll, keys and monitor switches.
 - `flutter/lib/mobile/pages/remote_page.dart`: starts and stops the controller with the session,
-  plus a keyboard toggle.
+  plus a keyboard toggle, invisible helper text and a full-diff soft keyboard (autocorrect works).
 - `flutter/android/app/build.gradle` + `AndroidManifest.xml`: app id `.pad` and the label "RustDesk Pad".
 - `.github/workflows/thor-android.yml` (new): builds only the signed arm64 APK.
 

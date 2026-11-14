@@ -12,6 +12,7 @@ import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/input_model.dart';
 
 import './gestures.dart';
+import '../../mobile/widgets/gamepad_controller.dart'; // rustdesk-controller
 
 class RawKeyFocusScope extends StatelessWidget {
   final FocusNode? focusNode;
@@ -210,6 +211,12 @@ class _RawTouchGestureDetectorRegionState
 
   onDoubleTap() async {
     if (isNotTouchBasedDevice()) {
+      return;
+    }
+    // rustdesk-controller: on Android a double-tap fits the PC screen to the display
+    // (a double-click is RT twice on the controller).
+    if (isAndroid && isMobile) {
+      GamepadController.fitScreen(ffi);
       return;
     }
     if (ffiModel.touchMode && ffi.cursorModel.lastIsBlocked) {

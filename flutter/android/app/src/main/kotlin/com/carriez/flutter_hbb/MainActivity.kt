@@ -24,6 +24,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import android.media.MediaCodecInfo
 import android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
 import android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar
@@ -97,6 +98,12 @@ class MainActivity : FlutterActivity() {
         // rustdesk-controller: gamepad -> remote mouse/keys
         GamepadBridge.attach(MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rd_gamepad"))
         GamepadBridge.onBack = { onBackPressed() }
+        GamepadBridge.onForceIme = {
+            // Pad Y: make sure the on-screen keyboard really shows (the Thor puts it on the bottom screen).
+            window.clearFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(currentFocus ?: window.decorView, InputMethodManager.SHOW_FORCED)
+        }
         thread {
             try {
                 setCodecInfo()

@@ -181,7 +181,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (isAndroid) {
       _gamepad = GamepadController(
           ffi: gFFI,
-          onToggleKeyboard: _toggleKeyboardFromGamepad,
+          onOpenKeyboard: _forceOpenKeyboardFromGamepad,
+          onCloseKeyboard: _closeKeyboardFromGamepad,
           onPadKeySent: _onPadKeySent)
         ..start();
     }
@@ -476,19 +477,33 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     inputModel.inputKey(char);
   }
 
-  // rustdesk-controller: one button opens/closes the soft keyboard.
-  void _toggleKeyboardFromGamepad() {
+  // rustdesk-controller: pad Y tap = force the soft keyboard open. It never closes
+  // it, so a keyboard state that's out of step (closed from Gboard, other screen)
+  // can't eat the press. Y held = close.
+  void _forceOpenKeyboardFromGamepad() {
     if (!mounted) return;
-    if (_showEdit) {
-      setState(() {
-        _showEdit = false;
-        gFFI.invokeMethod("enable_soft_keyboard", false);
-        _mobileFocusNode.unfocus();
-        _physicalFocusNode.requestFocus();
-      });
-    } else {
+    if (!_showEdit) {
       openKeyboard();
+    } else {
+      gFFI.invokeMethod("enable_soft_keyboard", true);
+      _mobileFocusNode.requestFocus();
+      SystemChannels.textInput.invokeMethod('TextInput.show');
     }
+    Timer(const Duration(milliseconds: 150), () {
+      if (mounted && _showEdit && inputModel.keyboardInputAllowed) {
+        GamepadController.forceShowIme();
+      }
+    });
+  }
+
+  void _closeKeyboardFromGamepad() {
+    if (!mounted) return;
+    setState(() {
+      _showEdit = false;
+      gFFI.invokeMethod("enable_soft_keyboard", false);
+      _mobileFocusNode.unfocus();
+      _physicalFocusNode.requestFocus();
+    });
   }
 
   void openKeyboard() {
