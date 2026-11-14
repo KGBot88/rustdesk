@@ -144,9 +144,6 @@ class GamepadController {
   /// Ask Android directly to show the soft keyboard.
   static void forceShowIme() => _channel.invokeMethod('force_ime');
 
-  /// Make the soft keyboard re-read the text field after it was changed from code.
-  static void restartIme() => _channel.invokeMethod('ime_restart');
-
   /// The part of the canvas that isn't covered by the toolbar / status bar
   /// (set by the remote page). Used by [fitScreen].
   static Rect Function()? visibleArea;

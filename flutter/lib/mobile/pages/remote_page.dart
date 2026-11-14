@@ -443,14 +443,20 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     return Rect.fromLTRB(0, top, width, bottom > top ? bottom : top);
   }
 
-  // rustdesk-controller: Gboard doesn't always notice text changed from code, so
-  // ask it to re-read the field once the change has reached the engine.
-  Timer? _imeSyncTimer;
-  void _syncImeAfterCodeEdit() {
-    _imeSyncTimer?.cancel(); // held X: one re-read after the burst
-    _imeSyncTimer = Timer(const Duration(milliseconds: 80), () {
-      if (mounted && _showEdit) GamepadController.restartIme();
-    });
+  // rustdesk-controller: Gboard sends Backspace as a KEY EVENT when no word is
+  // being composed. Upstream lets it bubble to RawKeyFocusScope, which sends it to
+  // the PC but leaves the hidden field unchanged, so the keyboard's text strip kept
+  // old letters and new typing landed after them. Handle it here instead: delete
+  // from the field (the strip follows) and send one Backspace to the PC.
+  KeyEventResult _onSoftKbKey(FocusNode node, KeyEvent event) {
+    if (!isAndroid || event.logicalKey != LogicalKeyboardKey.backspace) {
+      return KeyEventResult.ignored;
+    }
+    if (event is KeyDownEvent || event is KeyRepeatEvent) {
+      inputModel.inputKey('VK_BACK');
+      _onPadKeySent('VK_BACK');
+    }
+    return KeyEventResult.handled; // key-up too, so nothing stray reaches the PC
   }
 
   // rustdesk-controller: start the keyboard's text over (after Enter, or after a
@@ -461,7 +467,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     _textController.value = TextEditingValue(
         text: initText,
         selection: TextSelection.collapsed(offset: initText.length));
-    _syncImeAfterCodeEdit();
   }
 
   // rustdesk-controller: keep the keyboard's text in step with pad keys.
@@ -474,7 +479,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       _textController.value = TextEditingValue(
           text: _value,
           selection: TextSelection.collapsed(offset: _value.length));
-      _syncImeAfterCodeEdit();
     } else {
       _resetSoftKbText(); // VK_RETURN, undo, paste
     }
@@ -840,7 +844,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
               height: 0,
               child: !_showEdit
                   ? Container()
-                  : TextFormField(
+                  : Focus(
+                    // rustdesk-controller: see _onSoftKbKey
+                    onKeyEvent: _onSoftKbKey,
+                    child: TextFormField(
                       textInputAction: TextInputAction.newline,
                       // rustdesk-controller: autocorrect on (Android); the full diff
                       // above sends its corrections to the PC.
@@ -865,7 +872,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                       // ko/zh/ja input method: the button will trigger `onKeyEvent`
                       //                     and the event will not popup if `KeyEventResult.handled` is returned.
                       onChanged: handleSoftKeyboardInput,
-                    ).workaroundFreezeLinuxMint(),
+                    ).workaroundFreezeLinuxMint()),
             ),
           ];
           if (showCursorPaint) {
