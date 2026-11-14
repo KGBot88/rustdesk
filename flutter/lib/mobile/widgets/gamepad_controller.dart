@@ -41,12 +41,19 @@ class GamepadController {
   static const Duration repeatEvery = Duration(milliseconds: 55);
   static const Duration tick = Duration(milliseconds: 8);
   static const Duration comboHold = Duration(seconds: 1); // hold Select+Start
+  static const Duration bHoldForEsc = Duration(milliseconds: 500); // B tap = Undo, hold = Esc
+  static const double zoomStep = 1.5; // D-pad Up zooms in by this much per press
   static const String _kOptMouseMode = 'rdpad-mouse-mode'; // 'N' = off
 
   final FFI ffi;
   final VoidCallback onToggleKeyboard;
 
-  GamepadController({required this.ffi, required this.onToggleKeyboard});
+  /// Called after the pad changes the PC's text, so the on-screen keyboard's text
+  /// can follow: 'VK_BACK', 'VK_RETURN', 'undo' or 'paste'.
+  final void Function(String vk)? onPadKeySent;
+
+  GamepadController(
+      {required this.ffi, required this.onToggleKeyboard, this.onPadKeySent});
 
   /// Controller-mouse mode. Off = the pad does nothing on the PC (Android keeps B/Back/Home).
   final ValueNotifier<bool> mouseMode = ValueNotifier<bool>(
@@ -66,6 +73,10 @@ class GamepadController {
   bool _l2KeyDown = false, _r2KeyDown = false;
   bool _leftHeld = false, _rightHeld = false;
   bool _precision = false;
+  Timer? _bTimer; // B: tap = Undo, hold = Esc
+  // Some pads report one D-pad press as a hat move AND a D-pad key; act on it once.
+  final Map<int, Duration> _lastDpad = {};
+  bool _bFiredEsc = false;
   double _scrollAccX = 0, _scrollAccY = 0;
 
   Timer? _timer;
@@ -97,6 +108,8 @@ class GamepadController {
 
   /// Let go of everything: held clicks, repeating keys, stick state.
   void _releaseAll() {
+    _bTimer?.cancel();
+    _bTimer = null;
     for (final t in _repeat.values) {
       t.cancel();
     }
@@ -284,10 +297,6 @@ class GamepadController {
 
   /// Keys that send a remote key and auto-repeat while held.
   static const Map<int, String> _repeatKeys = {
-    _K.dpadUp: 'VK_UP',
-    _K.dpadDown: 'VK_DOWN',
-    _K.dpadLeft: 'VK_LEFT',
-    _K.dpadRight: 'VK_RIGHT',
     _K.x: 'VK_BACK',
   };
 
@@ -315,7 +324,29 @@ class GamepadController {
         _press('VK_RETURN');
         break;
       case _K.b:
-        _press('VK_ESCAPE');
+        _bFiredEsc = false;
+        _bTimer?.cancel();
+        _bTimer = Timer(bHoldForEsc, () {
+          _bFiredEsc = true;
+          _press('VK_ESCAPE');
+        });
+        break;
+      case _K.dpadUp:
+        if (_dpadDup(code)) break;
+        _zoomAtCursor();
+        break;
+      case _K.dpadDown:
+        if (_dpadDup(code)) break;
+        _fitScreen();
+        break;
+      case _K.dpadLeft:
+        if (_dpadDup(code)) break;
+        _ctrlKey('VK_C'); // Copy
+        break;
+      case _K.dpadRight:
+        if (_dpadDup(code)) break;
+        _ctrlKey('VK_V'); // Paste
+        onPadKeySent?.call('paste');
         break;
       case _K.y:
         onToggleKeyboard();
@@ -358,10 +389,67 @@ class GamepadController {
       case _K.l3:
         _input.tapUp(MouseButtons.wheel);
         break;
+      case _K.b:
+        if (_bTimer != null && !_bFiredEsc) {
+          _ctrlKey('VK_Z'); // Undo
+          onPadKeySent?.call('undo');
+        }
+        _bTimer?.cancel();
+        _bTimer = null;
+        break;
     }
   }
 
-  void _press(String name) => _input.inputKey(name);
+  void _press(String name) {
+    _input.inputKey(name);
+    if (name == 'VK_BACK' || name == 'VK_RETURN') onPadKeySent?.call(name);
+  }
+
+  bool _dpadDup(int code) {
+    final now = _clock.elapsed;
+    final last = _lastDpad[code];
+    _lastDpad[code] = now;
+    return last != null && now - last < const Duration(milliseconds: 120);
+  }
+
+  void _ctrlKey(String name) {
+    if (!_input.keyboardPerm) return;
+    bind.sessionInputKey(
+        sessionId: ffi.sessionId,
+        name: name,
+        down: false,
+        press: true,
+        alt: false,
+        ctrl: true,
+        shift: false,
+        command: false);
+  }
+
+  // ---------------- view: zoom / fit ----------------
+
+  /// Zoom the picture in around the mouse cursor (stops at RustDesk's max zoom).
+  void _zoomAtCursor() {
+    final canvas = ffi.canvasModel;
+    final s = canvas.scale;
+    final focal = Offset(canvas.x + _cursor.x * s,
+        canvas.y + _cursor.y * s + canvas.getAdjustY());
+    canvas.updateScale(zoomStep, focal);
+    if ((canvas.scale - s).abs() < 1e-6) {
+      showToast('Max zoom', timeout: const Duration(milliseconds: 700));
+    }
+  }
+
+  /// Fit the whole PC monitor on the handheld's screen.
+  void _fitScreen() {
+    final canvas = ffi.canvasModel;
+    final size = canvas.getSize();
+    final w = canvas.getDisplayWidth(), h = canvas.getDisplayHeight();
+    if (w <= 0 || h <= 0 || canvas.scale <= 0) return;
+    final fit = min(size.width / w, size.height / h);
+    canvas.updateScale(
+        fit / canvas.scale, Offset(size.width / 2, size.height / 2));
+    canvas.resetOffset();
+  }
 
   void _altTab() {
     if (!_input.keyboardPerm) return;

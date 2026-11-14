@@ -180,7 +180,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     // rustdesk-controller: handheld controller drives the remote mouse/keys.
     if (isAndroid) {
       _gamepad = GamepadController(
-          ffi: gFFI, onToggleKeyboard: _toggleKeyboardFromGamepad)
+          ffi: gFFI,
+          onToggleKeyboard: _toggleKeyboardFromGamepad,
+          onPadKeySent: _onPadKeySent)
         ..start();
     }
 
@@ -395,38 +397,58 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       // clipboard
       oldValue = '';
     }
-    // This length-only diff assumes the IME appends at the end. If an IME
-    // leaves the caret inside paired punctuation, later insertions can replay
-    // the closing symbol: "()" -> "(a)" sends ")" instead of "a". This is a
-    // client text-diff issue, independent of the host keyboard layout.
-    if (newValue.length == oldValue.length) {
-      // ?
-    } else if (newValue.length < oldValue.length) {
-      final char = 'VK_BACK';
-      inputModel.inputKey(char);
-    } else {
-      final content = newValue.substring(oldValue.length);
-      if (content.length > 1) {
-        if (oldValue != '' &&
-            content.length == 2 &&
-            (content == '""' ||
-                content == '()' ||
-                content == '[]' ||
-                content == '<>' ||
-                content == "{}" ||
-                content == '”“' ||
-                content == '《》' ||
-                content == '（）' ||
-                content == '【】')) {
-          // can not only input content[0], because when input ], [ are also auo insert, which cause ] never be input
-          bind.sessionInputString(sessionId: sessionId, value: content);
-          _openKeyboardUnlocked();
-          return;
-        }
-        bind.sessionInputString(sessionId: sessionId, value: content);
-      } else {
-        inputChar(content);
+    // rustdesk-controller: full diff instead of upstream's length-only one.
+    // Whatever changed after the common start is retyped: autocorrect, picked
+    // suggestions and edits with the caret moved all reach the PC, so the PC text
+    // matches what the on-screen keyboard shows.
+    final o = oldValue.runes.toList();
+    final n = newValue.runes.toList();
+    var p = 0;
+    while (p < o.length && p < n.length && o[p] == n[p]) {
+      p++;
+    }
+    final removed = o.length - p;
+    final added = String.fromCharCodes(n.sublist(p));
+    for (var i = 0; i < removed; i++) {
+      inputModel.inputKey('VK_BACK');
+    }
+    if (added.isEmpty) return;
+    // Newlines go as real Enter presses; text between them as one string.
+    final parts = added.split('\n');
+    for (var i = 0; i < parts.length; i++) {
+      if (i > 0) inputChar('\n');
+      final part = parts[i];
+      if (part.runes.length > 1) {
+        bind.sessionInputString(sessionId: sessionId, value: part);
+      } else if (part.isNotEmpty) {
+        inputChar(part);
       }
+    }
+    if (added.endsWith('\n')) _resetSoftKbText();
+  }
+
+  // rustdesk-controller: start the keyboard's text over (after Enter, or after a
+  // pad Undo/Paste whose effect on the PC text we can't know).
+  void _resetSoftKbText() {
+    if (!_showEdit) return;
+    _value = initText;
+    _textController.value = TextEditingValue(
+        text: initText,
+        selection: TextSelection.collapsed(offset: initText.length));
+  }
+
+  // rustdesk-controller: keep the keyboard's text in step with pad keys.
+  void _onPadKeySent(String key) {
+    if (!_showEdit || isIOS) return;
+    if (key == 'VK_BACK') {
+      final r = _value.runes.toList();
+      if (r.length <= 1) return;
+      _value = String.fromCharCodes(r.sublist(0, r.length - 1));
+      _textController.value = TextEditingValue(
+          text: _value,
+          selection: TextSelection.collapsed(offset: _value.length));
+    } else {
+      _resetSoftKbText(); // VK_RETURN, undo, paste
     }
   }
 
@@ -777,7 +799,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                   ? Container()
                   : TextFormField(
                       textInputAction: TextInputAction.newline,
-                      autocorrect: false,
+                      // rustdesk-controller: autocorrect on (Android); the full diff
+                      // above sends its corrections to the PC.
+                      autocorrect: isAndroid,
                       // Flutter 3.16.9 Android.
                       // `enableSuggestions` causes secure keyboard to be shown.
                       // https://github.com/flutter/flutter/issues/139143
