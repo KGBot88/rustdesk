@@ -40,6 +40,9 @@ object GamepadBridge {
     /** Force the soft keyboard to show (Dart "force_ime"), set by MainActivity. */
     var onForceIme: (() -> Unit)? = null
 
+    /** Make the soft keyboard re-read the text field (Dart "ime_restart"), set by MainActivity. */
+    var onImeRestart: (() -> Unit)? = null
+
     private val last = FloatArray(8)
     private val loggedDevices = HashSet<Int>()
 
@@ -55,6 +58,10 @@ object GamepadBridge {
                 }
                 "force_ime" -> {
                     onForceIme?.invoke()
+                    result.success(true)
+                }
+                "ime_restart" -> {
+                    onImeRestart?.invoke()
                     result.success(true)
                 }
                 "set_active" -> {

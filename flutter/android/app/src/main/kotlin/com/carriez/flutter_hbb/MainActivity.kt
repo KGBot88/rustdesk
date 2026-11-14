@@ -98,6 +98,12 @@ class MainActivity : FlutterActivity() {
         // rustdesk-controller: gamepad -> remote mouse/keys
         GamepadBridge.attach(MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rd_gamepad"))
         GamepadBridge.onBack = { onBackPressed() }
+        GamepadBridge.onImeRestart = {
+            // Text changed from code (pad Backspace, reset after Enter): without this Gboard can keep
+            // showing (and typing onto) its old copy of the text.
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            currentFocus?.let { imm.restartInput(it) }
+        }
         GamepadBridge.onForceIme = {
             // Pad Y: make sure the on-screen keyboard really shows (the Thor puts it on the bottom screen).
             window.clearFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)

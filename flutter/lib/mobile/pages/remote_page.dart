@@ -185,6 +185,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           onCloseKeyboard: _closeKeyboardFromGamepad,
           onPadKeySent: _onPadKeySent)
         ..start();
+      GamepadController.visibleArea = _visibleCanvasArea;
     }
 
     // Wayland sessions may use clipboard-based text input on the controlled side.
@@ -205,6 +206,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     HardwareKeyboard.instance.removeHandler(_handleLocalKeyEvent);
     _gamepad?.stop();
     _gamepad = null;
+    GamepadController.visibleArea = null;
     WidgetsBinding.instance.removeObserver(this);
     // Close the session up-front. `gFFI.close()` below only calls `sessionClose`
     // after several awaits (canvas save, image update, the `enable_soft_keyboard`
@@ -428,6 +430,29 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (added.endsWith('\n')) _resetSoftKbText();
   }
 
+  // rustdesk-controller: the screen area not covered by the status bar (top) or
+  // the session toolbar + nav bar (bottom). Double-tap fit uses it.
+  final GlobalKey _bottomBarKey = GlobalKey();
+  Rect _visibleCanvasArea() {
+    final mq = MediaQueryData.fromView(View.of(context));
+    final box = _bottomBarKey.currentContext?.findRenderObject() as RenderBox?;
+    final barH = (box != null && box.hasSize) ? box.size.height : 0.0;
+    final width = gFFI.canvasModel.getSize().width;
+    final top = mq.padding.top;
+    final bottom = mq.size.height - barH;
+    return Rect.fromLTRB(0, top, width, bottom > top ? bottom : top);
+  }
+
+  // rustdesk-controller: Gboard doesn't always notice text changed from code, so
+  // ask it to re-read the field once the change has reached the engine.
+  Timer? _imeSyncTimer;
+  void _syncImeAfterCodeEdit() {
+    _imeSyncTimer?.cancel(); // held X: one re-read after the burst
+    _imeSyncTimer = Timer(const Duration(milliseconds: 80), () {
+      if (mounted && _showEdit) GamepadController.restartIme();
+    });
+  }
+
   // rustdesk-controller: start the keyboard's text over (after Enter, or after a
   // pad Undo/Paste whose effect on the PC text we can't know).
   void _resetSoftKbText() {
@@ -436,6 +461,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     _textController.value = TextEditingValue(
         text: initText,
         selection: TextSelection.collapsed(offset: initText.length));
+    _syncImeAfterCodeEdit();
   }
 
   // rustdesk-controller: keep the keyboard's text in step with pad keys.
@@ -448,6 +474,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       _textController.value = TextEditingValue(
           text: _value,
           selection: TextSelection.collapsed(offset: _value.length));
+      _syncImeAfterCodeEdit();
     } else {
       _resetSoftKbText(); // VK_RETURN, undo, paste
     }
@@ -597,6 +624,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                     });
                   }),
           bottomNavigationBar: Obx(() => Stack(
+                key: _bottomBarKey, // rustdesk-controller: measured for double-tap fit
                 alignment: Alignment.bottomCenter,
                 children: [
                   gFFI.ffiModel.pi.isSet.isTrue &&

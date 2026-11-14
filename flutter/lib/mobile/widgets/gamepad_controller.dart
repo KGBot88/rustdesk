@@ -144,6 +144,13 @@ class GamepadController {
   /// Ask Android directly to show the soft keyboard.
   static void forceShowIme() => _channel.invokeMethod('force_ime');
 
+  /// Make the soft keyboard re-read the text field after it was changed from code.
+  static void restartIme() => _channel.invokeMethod('ime_restart');
+
+  /// The part of the canvas that isn't covered by the toolbar / status bar
+  /// (set by the remote page). Used by [fitScreen].
+  static Rect Function()? visibleArea;
+
   /// Select and Start: a tap does its normal job (on release); holding both toggles the mode.
   void _onComboKey(int code, bool down) {
     if (down) {
@@ -426,16 +433,19 @@ class GamepadController {
 
   // ---------------- view ----------------
 
-  /// Fit the whole PC monitor on the handheld's screen (double-tap the screen).
+  /// Fit the whole PC monitor into the visible part of the handheld's screen
+  /// (double-tap the screen), so the toolbar doesn't hide the PC's taskbar.
   static void fitScreen(FFI ffi) {
     final canvas = ffi.canvasModel;
-    final size = canvas.getSize();
+    final area = visibleArea?.call() ?? (Offset.zero & canvas.getSize());
     final w = canvas.getDisplayWidth(), h = canvas.getDisplayHeight();
     if (w <= 0 || h <= 0 || canvas.scale <= 0) return;
-    final fit = min(size.width / w, size.height / h);
-    canvas.updateScale(
-        fit / canvas.scale, Offset(size.width / 2, size.height / 2));
-    canvas.resetOffset();
+    if (area.width <= 0 || area.height <= 0) return;
+    final fit = min(area.width / w, area.height / h);
+    canvas.updateScale(fit / canvas.scale, area.center);
+    // Centre the picture in the visible area.
+    canvas.panX(area.left + (area.width - w * canvas.scale) / 2 - canvas.x);
+    canvas.panY(area.top + (area.height - h * canvas.scale) / 2 - canvas.y);
   }
 
   void _altTab() {
